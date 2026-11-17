@@ -6,7 +6,7 @@ name: Update Tokyo weather
 
 on:
   schedule:
-    - cron: "*/20 * * * *"
+    - cron: "7,27,47 * * * *"   # every 20 minutes, off the busy top of the hour
   workflow_dispatch:
 
 permissions:
