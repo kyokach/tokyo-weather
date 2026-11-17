@@ -1,12 +1,16 @@
-# Tokyo's current weather as JSON for a VRChat world.
-# Every 20 minutes: ask Open-Meteo (free, no key; data under CC BY 4.0, credit "Weather data by Open-Meteo.com")
-# for Tokyo's current precipitation, cloud cover and weather code, and publish them as docs/weather.json on
-# GitHub Pages (*.github.io is on VRChat's default string-loading allowlist).
+# Now shading - Tokyo's weather for the world's Live mode (KTBWeather).
+# Asks Open-Meteo (free, no key; data under CC BY 4.0, credit "Weather data by Open-Meteo.com") for Tokyo's
+# daily forecast for the next 16 days and publishes it as docs/weather.json on GitHub Pages (*.github.io is on
+# VRChat's default string-loading allowlist). The world shows the weather of the current Japanese day all day
+# (2026-11-17), so one successful run keeps it working for about two weeks even if a scheduled run is skipped.
+#   days[]: start (unix time of 00:00 JST), code (WMO, the day's most significant), rain_mm (day total),
+#           rain_h (hours with precipitation), cloud (mean %)
+#   unix / precip / cloud / code: the current observation (older world versions read these)
 name: Update Tokyo weather
 
 on:
   schedule:
-    - cron: "7,27,47 * * * *"   # every 20 minutes, off the busy top of the hour
+    - cron: "7 */3 * * *"       # every 3 hours (the daily forecast changes slowly)
   workflow_dispatch:
 
 permissions:
@@ -17,16 +21,22 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Fetch the current weather
+      - name: Fetch the forecast
         run: |
-          curl -fsS "https://api.open-meteo.com/v1/forecast?latitude=35.68&longitude=139.69&current=precipitation,cloud_cover,weather_code&timeformat=unixtime" -o raw.json
+          curl -fsS "https://api.open-meteo.com/v1/forecast?latitude=35.68&longitude=139.69&current=precipitation,cloud_cover,weather_code&daily=weather_code,precipitation_sum,precipitation_hours,cloud_cover_mean&timezone=Asia%2FTokyo&forecast_days=16&timeformat=unixtime" -o raw.json
           mkdir -p docs
           python3 - <<'PY'
           import json
-          c = json.load(open("raw.json"))["current"]
-          out = {"unix": c["time"], "precip": c["precipitation"], "cloud": c["cloud_cover"], "code": c["weather_code"]}
+          r = json.load(open("raw.json"))
+          c, d = r["current"], r["daily"]
+          days = []
+          for i, t in enumerate(d["time"]):
+              days.append({"start": t, "code": d["weather_code"][i], "rain_mm": d["precipitation_sum"][i],
+                           "rain_h": d["precipitation_hours"][i], "cloud": d["cloud_cover_mean"][i]})
+          out = {"unix": c["time"], "precip": c["precipitation"], "cloud": c["cloud_cover"], "code": c["weather_code"],
+                 "days": days}
           json.dump(out, open("docs/weather.json", "w"))
-          print(out)
+          print(json.dumps(out)[:400])
           PY
       - name: Publish
         run: |
