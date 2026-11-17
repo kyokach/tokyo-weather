@@ -1,0 +1,37 @@
+# Tokyo's current weather as JSON for a VRChat world.
+# Every 20 minutes: ask Open-Meteo (free, no key; data under CC BY 4.0, credit "Weather data by Open-Meteo.com")
+# for Tokyo's current precipitation, cloud cover and weather code, and publish them as docs/weather.json on
+# GitHub Pages (*.github.io is on VRChat's default string-loading allowlist).
+name: Update Tokyo weather
+
+on:
+  schedule:
+    - cron: "*/20 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fetch the current weather
+        run: |
+          curl -fsS "https://api.open-meteo.com/v1/forecast?latitude=35.68&longitude=139.69&current=precipitation,cloud_cover,weather_code&timeformat=unixtime" -o raw.json
+          mkdir -p docs
+          python3 - <<'PY'
+          import json
+          c = json.load(open("raw.json"))["current"]
+          out = {"unix": c["time"], "precip": c["precipitation"], "cloud": c["cloud_cover"], "code": c["weather_code"]}
+          json.dump(out, open("docs/weather.json", "w"))
+          print(out)
+          PY
+      - name: Publish
+        run: |
+          git config user.name "weather-bot"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/weather.json
+          git diff --cached --quiet || git commit -m "Tokyo weather"
+          git push
